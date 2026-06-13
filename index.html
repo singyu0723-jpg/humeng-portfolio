@@ -69,7 +69,7 @@ select{font-family:inherit;font-size:13px;font-weight:800;color:var(--ink);backg
 .hitem.open .hbar{border-bottom:1px dashed var(--line)}
 .hbar .hnm{grid-area:name;font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hbar .hnm .code{font-size:10.5px;color:var(--mut);font-weight:700;margin-left:5px}
-.hmetrics{grid-area:metrics;display:grid;grid-template-columns:repeat(5,1fr);gap:6px;align-items:center}
+.hmetrics{grid-area:metrics;display:grid;grid-template-columns:repeat(6,1fr);gap:6px;align-items:center}
 .met{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2;min-width:0}
 .met .ml{font-size:9.5px;color:var(--mut);font-weight:700}
 .met .mv{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -86,9 +86,11 @@ select{font-family:inherit;font-size:13px;font-weight:800;color:var(--ink);backg
   .hbar{grid-template-columns:1fr auto;grid-template-areas:"name caret" "metrics metrics";row-gap:8px;padding:9px 11px}
   .hmetrics{gap:4px}.met .mv{font-size:12px}.met .ml{font-size:9px}
 }
-.addrow{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:12px;background:var(--chip);border-radius:10px;padding:9px 11px}
-.addrow input,.addrow select{padding:9px 11px;line-height:1.2}
-.addrow label{font-size:12px;font-weight:800;color:var(--mut)}
+.addrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;background:var(--chip);border-radius:10px;padding:10px 12px}
+.addrow label{font-size:12px;font-weight:800;color:var(--mut);display:flex;align-items:center;height:40px}
+.addrow input,.addrow select,.addrow button{height:40px;line-height:normal}
+.addrow input,.addrow select{padding:0 12px;font-size:14px}
+.addrow button{padding:0 18px}
 /* 總資產配置 */
 .srcbar{display:flex;height:26px;border-radius:8px;overflow:hidden;margin:8px 0 4px;border:1px solid var(--line)}
 .srcbar .seg{font-size:11px}
@@ -273,10 +275,12 @@ function recalcAlloc(){
   if(a.poolMV>0)segs.push({name:'待分類',color:'#b9ad99',mv:a.poolMV});
   segs.push({name:'銀色彈藥',color:'#8a7b63',mv:a.silver});
   const sum=segs.reduce((s,x)=>s+x.mv,0)||1;
+  const SHORT={'ETF（美股）':'ETF','短線（資金靈活）':'短線','中長期':'中長期','銀色彈藥':'銀彈','待分類':'待分'};
   const bar=document.getElementById('catbar');if(bar){bar.innerHTML='';
     segs.forEach(s=>{const w=s.mv/sum*100;if(w<=0.2)return;const d=document.createElement('div');d.className='seg';
-      d.style.width=w+'%';d.style.background=s.color;
-      d.innerHTML='<span class="s1">'+s.name+'</span><span class="s2">'+w.toFixed(0)+'%</span>';bar.appendChild(d);});}
+      d.style.width=w+'%';d.style.background=s.color;d.title=s.name+' '+w.toFixed(0)+'%';
+      const label=w>=15?s.name:(w>=7?(SHORT[s.name]||s.name):'');
+      d.innerHTML=(label?'<span class="s1">'+label+'</span>':'')+'<span class="s2">'+w.toFixed(0)+'%</span>';bar.appendChild(d);});}
   const brk=document.getElementById('catbrk');if(brk){brk.innerHTML='';
     segs.forEach(s=>{const pct=s.mv/total*100;const row=document.createElement('div');row.className='brk';
       row.innerHTML='<span class="nm"><span class="dot" style="background:'+s.color+'"></span>'+s.name+'</span>'+
@@ -337,12 +341,14 @@ function barInner(h){
   let pltxt='—',plc='var(--mut)';if(h.cost>0&&isFinite(cur)&&cur>0){const pl=(cur/h.cost-1)*100;pltxt=(pl>=0?'+':'')+pl.toFixed(1)+'%';plc=col(pl);}
   const mv=holdingMV(h);const catmv=catMVById(h.cat);const wpct=catmv>0&&mv>0?(mv/catmv*100):0;
   const lots=h.shares>0?(h.market==='us'?(h.shares+' 股'):((h.shares/1000).toFixed(h.shares>=1000?1:2)+' 張')):'—';
+  const invAmt=holdingCost(h);
   return '<span class="hnm">'+h.name+'<span class="code">'+h.code+(h.market==='us'?' US':'')+'</span></span>'+
     '<span class="hmetrics">'+
       metCell('現價',(isFinite(cur)&&cur>0?fpx(cur):'—')+chg)+
       metCell('成本均價',h.cost>0?fpx(h.cost):'—')+
       metCell('損益','<span style="color:'+plc+'">'+pltxt+'</span>')+
       metCell('股數',lots)+
+      metCell('投入金額',invAmt>0?'$'+f0(invAmt):'—')+
       metCell('部位',wpct>0?wpct.toFixed(0)+'%':'—')+
     '</span><span class="hcar">▾</span>';
 }
