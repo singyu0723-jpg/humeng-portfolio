@@ -69,7 +69,7 @@ select{font-family:inherit;font-size:13px;font-weight:800;color:var(--ink);backg
 .hitem.open .hbar{border-bottom:1px dashed var(--line)}
 .hbar .hnm{grid-area:name;font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hbar .hnm .code{font-size:10.5px;color:var(--mut);font-weight:700;margin-left:5px}
-.hmetrics{grid-area:metrics;display:grid;grid-template-columns:repeat(6,1fr);gap:6px;align-items:center}
+.hmetrics{grid-area:metrics;display:grid;grid-template-columns:repeat(7,1fr);gap:6px;align-items:center}
 .met{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2;min-width:0}
 .met .ml{font-size:9.5px;color:var(--mut);font-weight:700}
 .met .mv{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -109,6 +109,13 @@ select{font-family:inherit;font-size:13px;font-weight:800;color:var(--ink);backg
 .whd .wnm .code{font-size:11px;color:var(--mut);font-weight:700}
 .wbody{display:none;padding:0 14px 14px;border-top:1px solid var(--line)}
 .wrow.open .wbody{display:block}
+.wbcols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:760px){.wbcols{grid-template-columns:1fr;gap:0}}
+.ovl{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;max-width:340px;width:100%}
+.mmsg{font-size:14.5px;font-weight:700;margin-bottom:14px;line-height:1.5}
+.mbtns{display:flex;gap:8px;justify-content:flex-end}
+.mbtns .btn,.mbtns .resetbtn{padding:8px 16px}
 .wgrp{font-size:15px;font-weight:800;color:#fff;display:flex;align-items:center;gap:8px;margin:0 -10px 9px;padding:9px 14px;border-radius:13px 13px 9px 9px}
 .wgrp .gst{margin-left:auto;font-size:11.5px;font-weight:700;opacity:.93;font-variant-numeric:tabular-nums}
 .sect{font-size:11.5px;color:var(--accent);font-weight:800;margin:11px 0 5px;letter-spacing:1px}
@@ -260,6 +267,7 @@ function totalCapital(){return gv('as_own')+gv('as_loan');}
 function holdingMV(h){const p=PX[h.code];const cur=p&&p.price>0?p.price:(h.cost||0);if(!h.shares||h.shares<=0)return 0;return cur*h.shares*(h.market==='us'?gv('fx'):1);}
 function holdingCost(h){if(!h.shares||!h.cost)return 0;return h.cost*h.shares*(h.market==='us'?gv('fx'):1);}
 function catMVById(cid){let mv=0;S.holdings.forEach(h=>{if((h.cat||POOL)===cid)mv+=holdingMV(h);});return mv;}
+function totalInvested(){let s=0;S.holdings.forEach(h=>s+=holdingMV(h));return s;}
 function alloc(){
   const total=totalCapital();let invested=0;const cm={};DRAGCATS.forEach(c=>cm[c.id]=0);let poolMV=0;
   S.holdings.forEach(h=>{const mv=holdingMV(h);invested+=mv;if(cm[h.cat]!=null)cm[h.cat]+=mv;else poolMV+=mv;});
@@ -331,15 +339,16 @@ function makeBar(h,idx){
     inp.addEventListener('input',e=>{const f=e.target.dataset.f;S.holdings[idx][f]=e.target.value===''?0:(parseFloat(e.target.value)||0);
       refreshBar(bar,S.holdings[idx]);recalcAlloc();save();});});
   edit.querySelector('select[data-f=cat]').addEventListener('change',e=>{S.holdings[idx].cat=e.target.value;buildList();recalcAlloc();save();});
-  edit.querySelector('[data-act=del]').addEventListener('click',()=>{
-    if(confirm('刪除 '+S.holdings[idx].name+'？')){S.holdings.splice(idx,1);buildList();recalcAlloc();save();}});
+  edit.querySelector('[data-act=del]').addEventListener('click',async()=>{
+    if(await uiConfirm('刪除 '+S.holdings[idx].name+'？')){S.holdings.splice(idx,1);buildList();recalcAlloc();save();}});
   item.appendChild(bar);item.appendChild(edit);return item;
 }
 function barInner(h){
   const p=PX[h.code]||{};const cur=p.price,prev=p.prev;
   let chg='';if(isFinite(cur)&&isFinite(prev)&&prev>0){const d=(cur/prev-1)*100;chg='<span class="chg" style="color:'+col(d)+'">'+(d>=0?'+':'')+d.toFixed(1)+'%</span>';}
   let pltxt='—',plc='var(--mut)';if(h.cost>0&&isFinite(cur)&&cur>0){const pl=(cur/h.cost-1)*100;pltxt=(pl>=0?'+':'')+pl.toFixed(1)+'%';plc=col(pl);}
-  const mv=holdingMV(h);const catmv=catMVById(h.cat);const wpct=catmv>0&&mv>0?(mv/catmv*100):0;
+  const mv=holdingMV(h);const catmv=catMVById(h.cat);const tinv=totalInvested();
+  const wpctCat=catmv>0&&mv>0?mv/catmv*100:0;const wpctAll=tinv>0&&mv>0?mv/tinv*100:0;
   const lots=h.shares>0?(h.market==='us'?(h.shares+' 股'):((h.shares/1000).toFixed(h.shares>=1000?1:2)+' 張')):'—';
   const invAmt=holdingCost(h);
   return '<span class="hnm">'+h.name+'<span class="code">'+h.code+(h.market==='us'?' US':'')+'</span></span>'+
@@ -349,7 +358,8 @@ function barInner(h){
       metCell('損益','<span style="color:'+plc+'">'+pltxt+'</span>')+
       metCell('股數',lots)+
       metCell('投入金額',invAmt>0?'$'+f0(invAmt):'—')+
-      metCell('部位',wpct>0?wpct.toFixed(0)+'%':'—')+
+      metCell('佔類別',wpctCat>0?wpctCat.toFixed(0)+'%':'—')+
+      metCell('佔整體','<span style="color:'+catColor(h.cat)+'">'+(wpctAll>0?wpctAll.toFixed(0)+'%':'—')+'</span>')+
     '</span><span class="hcar">▾</span>';
 }
 function metCell(l,v){return '<span class="met"><span class="ml">'+l+'</span><span class="mv">'+v+'</span></span>';}
@@ -450,13 +460,16 @@ function updWatchHead(idx){const h=S.holdings[idx];if(!h)return;const p=PX[h.cod
   const me=document.getElementById('wmv_'+idx);if(me){const mv=holdingMV(h);me.textContent=mv>0?'$'+f0(mv):'—';}}
 function renderWatchBody(idx){
   const h=S.holdings[idx];const body=document.getElementById('wb_'+idx);if(!body)return;
-  body.innerHTML='<div class="sect">三關價（明日 · <span id="pvsrc_'+idx+'"></span>）</div><div class="bar-wrap" id="mbar_'+idx+'"></div>'+
-    '<div class="calc"><label>💰 損益試算 — 假設股價 <button class="btn ghost sm" style="float:right;margin-top:-2px" id="sync_'+idx+'">↻ 同步現價</button></label>'+
-      '<input type="number" id="min_'+idx+'" step="any"><input type="range" id="mrg_'+idx+'" step="any">'+
-      '<div class="bigpl" id="mout_'+idx+'">—</div><div class="bigpct" id="mpct_'+idx+'"></div>'+
-      '<div class="mini2"><span>毛利 <b id="mgr_'+idx+'"></b></span><span>稅費 <b id="mfe_'+idx+'"></b></span></div></div>'+
-    '<div class="sect">持倉（均價／股數）</div><div class="opts">均價 <input type="number" id="wc_'+idx+'" step="any" value="'+(h.cost||'')+'" placeholder="0">　股數 <input type="number" id="wq_'+idx+'" step="any" value="'+(h.shares||'')+'" placeholder="0"></div>'+
-    '<div class="sect">均線 / 關鍵價位</div><div id="mlv_'+idx+'"></div>';
+  body.innerHTML='<div class="wbcols"><div class="wbcol">'+
+      '<div class="sect">三關價（明日 · <span id="pvsrc_'+idx+'"></span>）</div><div class="bar-wrap" id="mbar_'+idx+'"></div>'+
+      '<div class="calc"><label>💰 損益試算 — 假設股價 <button class="btn ghost sm" style="float:right;margin-top:-2px" id="sync_'+idx+'">↻ 同步現價</button></label>'+
+        '<input type="number" id="min_'+idx+'" step="any"><input type="range" id="mrg_'+idx+'" step="any">'+
+        '<div class="bigpl" id="mout_'+idx+'">—</div><div class="bigpct" id="mpct_'+idx+'"></div>'+
+        '<div class="mini2"><span>毛利 <b id="mgr_'+idx+'"></b></span><span>稅費 <b id="mfe_'+idx+'"></b></span></div></div>'+
+      '<div class="sect">持倉（均價／股數）</div><div class="opts">均價 <input type="number" id="wc_'+idx+'" step="any" value="'+(h.cost||'')+'" placeholder="0">　股數 <input type="number" id="wq_'+idx+'" step="any" value="'+(h.shares||'')+'" placeholder="0"></div>'+
+    '</div><div class="wbcol">'+
+      '<div class="sect">均線 / 關鍵價位</div><div id="mlv_'+idx+'"></div>'+
+    '</div></div>';
   const inp=document.getElementById('min_'+idx),rg=document.getElementById('mrg_'+idx);
   inp.addEventListener('input',()=>{rg.value=inp.value;updWatchBody(idx);});
   rg.addEventListener('input',()=>{inp.value=rg.value;updWatchBody(idx);});
@@ -465,6 +478,7 @@ function renderWatchBody(idx){
     if(pfx==='wc')S.holdings[idx].cost=parseFloat(e.target.value)||0;else S.holdings[idx].shares=parseFloat(e.target.value)||0;
     updWatchBody(idx);updWatchHead(idx);recalcAlloc();save();});});
   initRange(idx);updWatchBody(idx);
+  ensureMA(h).then(()=>{if(WOPEN[h.code])updWatchBody(idx);});
 }
 function initRange(idx){const h=S.holdings[idx];const p=PX[h.code]||{};const base=(p.price>0?p.price:(h.cost>0?h.cost:100));
   const rg=document.getElementById('mrg_'+idx),inp=document.getElementById('min_'+idx);if(!rg)return;
@@ -484,12 +498,12 @@ function updWatchBody(idx){
   if(bar){if(pv&&isFinite(cur)&&cur>0){const lo=Math.min(pv.dn,cur)*0.997,hi=Math.max(pv.up,cur)*1.003;const pos=x=>((x-lo)/(hi-lo)*100);const tk=(l,t)=>'<div class="tick" style="left:'+l+'%"><span>'+t+'</span></div>';
       bar.innerHTML='<div class="gbar"></div>'+tk(pos(pv.dn),'下關 '+fpx(pv.dn))+tk(pos(pv.mid),'中關 '+fpx(pv.mid))+tk(pos(pv.up),'上關 '+fpx(pv.up))+'<div class="nowm" style="left:'+pos(cur)+'%"><span>現 '+fpx(cur)+'</span></div>';}
     else bar.innerHTML='<div class="empty">尚無足夠資料（先 ↻ 抓價）</div>';}
-  const lv=document.getElementById('mlv_'+idx);const d=DATA[h.code]||{};
-  if(lv){let rows='';const add=(k,v)=>{if(isFinite(v))rows+='<div class="krow"><span class="k">'+k+'</span><span class="v">'+fpx(v)+'</span></div>';};
+  const lv=document.getElementById('mlv_'+idx);const d=DATA[h.code]||{};const ma=MAC[h.code]||{};
+  if(lv){let rows='';const add=(k,v)=>{rows+='<div class="krow"><span class="k">'+k+'</span><span class="v">'+(isFinite(v)?fpx(v):'…')+'</span></div>';};
     add('現價',cur);add('前收',p.prev);add('今日高',p.high);add('今日低',p.low);
-    if(isFinite(d.ma20))add('月線 MA20',d.ma20);if(isFinite(d.ma60))add('季線 MA60',d.ma60);
+    add('五日線',ma.ma5);add('月線 (20)',ma.ma20!=null?ma.ma20:d.ma20);add('季線 (60)',ma.ma60!=null?ma.ma60:d.ma60);add('年線 (240)',ma.ma240);
     if(pv){add('上關',pv.up);add('中關（多空分界）',pv.mid);add('下關',pv.dn);}if(h.cost>0)add('你的均價',h.cost);
-    lv.innerHTML=rows||'<div class="empty">—</div>';}
+    lv.innerHTML=rows;}
 }
 document.getElementById('disc').addEventListener('input',()=>{S.disc=gv('disc');S.holdings.forEach((h,i)=>{if(WOPEN[h.code])updWatchBody(i);});save();});
 document.getElementById('aftertax').addEventListener('change',()=>S.holdings.forEach((h,i)=>{if(WOPEN[h.code])updWatchBody(i);}));
@@ -533,6 +547,13 @@ async function fetchAll(){
 }
 fetch('data.json?_='+Date.now()).then(r=>r.ok?r.json():null).then(d=>{if(d&&d.stocks){Object.assign(DATA,d.stocks);
   if(document.getElementById('view-watch').style.display!=='none')S.holdings.forEach((h,i)=>{if(WOPEN[h.code])updWatchBody(i);});}}).catch(()=>{});
+/* 均線：展開盯盤時，前端抓近一年日線自算 5/20/60/240 日均 */
+const MAC={};
+function maOf(c,n){if(!c||c.length<n)return null;let s=0;for(let i=c.length-n;i<c.length;i++)s+=c[i];return s/n;}
+async function ensureMA(h){if(MAC[h.code])return;const syms=h.market==='us'?[h.code]:[h.code+'.TW',h.code+'.TWO'];
+  for(const sym of syms){const cl=await pfetch('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(sym)+'?range=1y&interval=1d',
+    j=>{const r=j&&j.chart&&j.chart.result&&j.chart.result[0];if(!r)return null;const q=r.indicators&&r.indicators.quote&&r.indicators.quote[0];const c=((q&&q.close)||[]).filter(x=>x!=null);return c.length>5?c:null;},8000);
+    if(cl){MAC[h.code]={ma5:maOf(cl,5),ma20:maOf(cl,20),ma60:maOf(cl,60),ma240:maOf(cl,240)};return;}}}
 
 /* ───────── 總資產配置（單一圓餅，依持倉） ───────── */
 function pieSlicePath(cx,cy,r,a0,a1){const pt=a=>{const rad=(a-90)*Math.PI/180;return [cx+r*Math.cos(rad),cy+r*Math.sin(rad)];};
@@ -569,9 +590,52 @@ setInterval(()=>{if(!document.hidden)fetchAll();},15000);
 /* ═══════════ Firebase 雲端同步 ═══════════ */
 const FB_CONFIG={apiKey:"AIzaSyAeka6qrpElotxc4mi8FgG0tROhVp93g9g",authDomain:"humeng-portfolio.firebaseapp.com",projectId:"humeng-portfolio",storageBucket:"humeng-portfolio.firebasestorage.app",messagingSenderId:"835294126286",appId:"1:835294126286:web:3ee19f7616bbcb2561709f"};
 let fbRef=null,fbUnsub=null,fbTimer=null,fbApplying=false;
+let CKEY=null,CKEY_TAG='',CSALT='',_keyP=null;
+/* ── 端對端加密：資料用密語加密後才上雲，後台/擁有者都解不開 ── */
+function _b64(a){return btoa(String.fromCharCode.apply(null,a));}
+function _unb64(s){return Uint8Array.from(atob(s),c=>c.charCodeAt(0));}
+async function deriveKey(pass,salt){const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:150000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);}
+async function encryptJSON(key,obj){const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(JSON.stringify(obj)));
+  return{iv:_b64(iv),enc:_b64(new Uint8Array(ct))};}
+async function decryptJSON(key,ivB,encB){const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:_unb64(ivB)},key,_unb64(encB));
+  return JSON.parse(new TextDecoder().decode(pt));}
+function askPass(isSetup){return new Promise(res=>{
+  const ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML='<div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;max-width:340px;width:100%">'+
+    '<div style="font-weight:800;font-size:15px;margin-bottom:6px">'+(isSetup?'🔒 設定同步密語':'🔑 輸入同步密語')+'</div>'+
+    '<div style="font-size:12px;color:var(--mut);margin-bottom:10px;line-height:1.5">'+(isSetup?'這組密語用來加密你的雲端資料，連網站管理者都看不到。請牢記——忘記將無法復原。':'輸入你設定的密語以解鎖雲端資料。')+'</div>'+
+    '<input type="password" id="_pp1" placeholder="密語" style="width:100%;margin-bottom:8px;padding:9px 11px">'+
+    (isSetup?'<input type="password" id="_pp2" placeholder="再次輸入" style="width:100%;margin-bottom:8px;padding:9px 11px">':'')+
+    '<div id="_pperr" style="color:var(--up);font-size:12px;font-weight:700;min-height:15px"></div>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px"><button id="_ppc" class="resetbtn">取消</button><button id="_ppok" class="btn sm">確定</button></div></div>';
+  document.body.appendChild(ov);const p1=ov.querySelector('#_pp1');setTimeout(()=>p1.focus(),50);
+  const done=v=>{ov.remove();res(v);};
+  ov.querySelector('#_ppc').onclick=()=>done(null);
+  ov.querySelector('#_ppok').onclick=()=>{const v1=p1.value;const v2=isSetup?ov.querySelector('#_pp2').value:v1;const err=ov.querySelector('#_pperr');
+    if(!v1){err.textContent='請輸入密語';return;}if(isSetup&&v1.length<4){err.textContent='密語至少 4 碼';return;}if(isSetup&&v1!==v2){err.textContent='兩次輸入不一致';return;}done(v1);};
+  p1.addEventListener('keydown',e=>{if(e.key==='Enter')ov.querySelector('#_ppok').click();});
+});}
+function uiConfirm(msg){return new Promise(res=>{const ov=document.createElement('div');ov.className='ovl';
+  ov.innerHTML='<div class="modal"><div class="mmsg">'+msg+'</div><div class="mbtns"><button class="resetbtn" id="_mc">取消</button><button class="btn sm" id="_mo">確定</button></div></div>';
+  document.body.appendChild(ov);ov.querySelector('#_mc').onclick=()=>{ov.remove();res(false);};ov.querySelector('#_mo').onclick=()=>{ov.remove();res(true);};
+  ov.addEventListener('click',e=>{if(e.target===ov){ov.remove();res(false);}});});}
+function uiAlert(msg){return new Promise(res=>{const ov=document.createElement('div');ov.className='ovl';
+  ov.innerHTML='<div class="modal"><div class="mmsg">'+msg+'</div><div class="mbtns"><button class="btn sm" id="_mo">確定</button></div></div>';
+  document.body.appendChild(ov);ov.querySelector('#_mo').onclick=()=>{ov.remove();res();};});}
+function ensureKey(d,uid){const salt=(d&&d.salt)?d.salt:(CSALT||_b64(crypto.getRandomValues(new Uint8Array(16))));const tag=uid+'|'+salt;
+  if(CKEY&&CKEY_TAG===tag){CSALT=salt;return Promise.resolve(true);}
+  if(_keyP)return _keyP;
+  _keyP=(async()=>{CSALT=salt;const hasData=!!(d&&d.enc);let pass=localStorage.getItem('humeng_pass_'+uid)||'';
+    while(true){if(!pass){pass=await askPass(!hasData);if(pass==null)return false;}
+      const key=await deriveKey(pass,_unb64(CSALT));
+      if(hasData){try{await decryptJSON(key,d.iv,d.enc);}catch(e){await uiAlert('密語不對，請再試一次');pass='';continue;}}
+      CKEY=key;CKEY_TAG=tag;try{localStorage.setItem('humeng_pass_'+uid,pass);}catch(e){}return true;}
+  })().finally(()=>{_keyP=null;});return _keyP;}
 function setSync(t,on){const b=document.getElementById('syncbtn');if(!b)return;b.textContent=t;b.style.borderColor=on?'var(--accent)':'var(--line)';b.style.color=on?'var(--accent)':'var(--mut)';}
 function fbAuthClick(){if(FB_CONFIG.apiKey==='PASTE_ME'){alert('目前用「本機儲存」：資料存在這台裝置的瀏覽器。要跨手機/電腦同步，請把 Firebase 的 firebaseConfig 貼進檔案的 FB_CONFIG。');return;}
-  const auth=firebase.auth();if(auth.currentUser){if(confirm('登出雲端同步？'))auth.signOut();}else auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e=>alert('登入失敗：'+e.message));}
+  const auth=firebase.auth();if(auth.currentUser){uiConfirm('登出雲端同步？').then(ok=>{if(ok)auth.signOut();});}else auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e=>uiAlert('登入失敗：'+e.message));}
 function fbApplyRemote(d){fbApplying=true;try{
   if(d.holdings)S.holdings=d.holdings;if(d.assets)S.assets=d.assets;
   if(d.fx){S.fx=d.fx;const x=document.getElementById('fx');if(x&&document.activeElement!==x)x.value=d.fx;}
@@ -583,14 +647,22 @@ function fbApplyRemote(d){fbApplying=true;try{
   if(document.getElementById('view-assets').style.display!=='none')recalcAssets();if(document.getElementById('view-watch').style.display!=='none')buildWatch();
   fetchAll();
 }finally{fbApplying=false;}}
-function fbSave(){if(!fbRef||fbApplying)return;clearTimeout(fbTimer);fbTimer=setTimeout(()=>{
-  fbRef.set({holdings:S.holdings,assets:S.assets,fx:S.fx,disc:S.disc,t:Date.now()},{merge:true})
-    .then(()=>setSync('☁ 已同步 · '+(firebase.auth().currentUser.email||''),true)).catch(()=>setSync('⚠ 同步失敗，點此重試',false));},600);}
+function fbSave(){if(!fbRef||fbApplying||!CKEY)return;clearTimeout(fbTimer);fbTimer=setTimeout(async()=>{
+  try{const p=await encryptJSON(CKEY,{holdings:S.holdings,assets:S.assets,fx:S.fx,disc:S.disc});
+    await fbRef.set({salt:CSALT,iv:p.iv,enc:p.enc,t:Date.now()});
+    setSync('🔒 已加密同步 · '+(firebase.auth().currentUser.email||''),true);
+  }catch(e){setSync('⚠ 同步失敗，點此重試',false);}},700);}
 (function fbInit(){if(FB_CONFIG.apiKey==='PASTE_ME'){setSync('💾 本機儲存',false);return;}
   try{firebase.initializeApp(FB_CONFIG);const db=firebase.firestore();try{db.enablePersistence({synchronizeTabs:true});}catch(e){}
     firebase.auth().onAuthStateChanged(u=>{if(fbUnsub){fbUnsub();fbUnsub=null;}
       if(u){fbRef=db.collection('users').doc(u.uid).collection('app').doc('state');setSync('☁ 已連線 · '+(u.email||''),true);
-        fbUnsub=fbRef.onSnapshot(snap=>{if(snap.metadata.hasPendingWrites)return;if(snap.exists)fbApplyRemote(snap.data());else fbSave();});
+        fbUnsub=fbRef.onSnapshot(async snap=>{
+          if(snap.metadata.hasPendingWrites)return;
+          const d=snap.exists?snap.data():null;
+          const ok=await ensureKey(d,u.uid);if(!ok){setSync('🔑 需要密語才能同步',false);return;}
+          if(d&&d.enc){try{const obj=await decryptJSON(CKEY,d.iv,d.enc);fbApplyRemote(obj);setSync('🔒 已加密同步 · '+(u.email||''),true);}catch(e){setSync('⚠ 解密失敗',false);}}
+          else{if(d&&d.holdings)fbApplyRemote(d);fbSave();}
+        });
       }else{fbRef=null;setSync('🔑 登入啟用雲端同步',false);}});
   }catch(e){setSync('⚠ Firebase 初始化失敗',false);}})();
 </script>
