@@ -1,0 +1,14 @@
+{
+  "_說明": "每日盤後 GitHub Actions 會抓這份清單裡的股票，算 MA20/MA60/三關價，寫進 data.json。持股有進出就改這裡（網站本身的持股清單是另外存在 Firebase/瀏覽器，這份只給盤後排程用）。",
+  "stocks": [
+    { "code": "1717", "market": "tw", "name": "長興" },
+    { "code": "6442", "market": "tw", "name": "光聖" },
+    { "code": "6235", "market": "tw", "name": "華孚" },
+    { "code": "6446", "market": "tw", "name": "藥華藥" },
+    { "code": "6962", "market": "tw", "name": "奕力-KY" },
+    { "code": "4763", "market": "tw", "name": "材料-KY" },
+    { "code": "1513", "market": "tw", "name": "中興電" },
+    { "code": "1519", "market": "tw", "name": "華城" },
+    { "code": "3037", "market": "tw", "name": "欣興" }
+  ]
+}
