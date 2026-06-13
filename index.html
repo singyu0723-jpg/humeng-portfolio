@@ -91,6 +91,17 @@ select{font-family:inherit;font-size:13px;font-weight:800;color:var(--ink);backg
 .addrow input,.addrow select,.addrow button{height:40px;line-height:normal}
 .addrow input,.addrow select{padding:0 12px;font-size:14px}
 .addrow button{padding:0 18px}
+.acwrap{position:relative;flex:1;min-width:160px}
+.acwrap input{width:100%}
+.acsug{position:absolute;left:0;right:0;top:calc(100% + 5px);background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 26px rgba(0,0,0,.16);z-index:60;max-height:300px;overflow:auto;display:none}
+.acsug.show{display:block}
+.acitem{padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--line);font-size:13.5px}
+.acitem:last-child{border-bottom:none}
+.acitem:hover{background:var(--chip)}
+.acitem .acn{font-weight:800}
+.acitem .acc{font-size:11.5px;color:var(--mut);font-weight:700}
+.acitem .actag{margin-left:auto;font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:10px;background:var(--chip);color:var(--mut);white-space:nowrap}
+.acstate{padding:10px 12px;color:var(--mut);font-size:12.5px}
 /* 總資產配置 */
 .srcbar{display:flex;height:26px;border-radius:8px;overflow:hidden;margin:8px 0 4px;border:1px solid var(--line)}
 .srcbar .seg{font-size:11px}
@@ -174,10 +185,10 @@ input[type=range]::-moz-range-thumb{width:17px;height:17px;border-radius:50%;bac
 
 <!-- ② 持倉部位 -->
 <section class="slide">
-  <h2><span style="color:var(--accent)">②</span> 持倉部位</h2>
+  <h2 style="display:flex;align-items:center;gap:9px"><span style="color:var(--accent)">②</span> 持倉部位<button class="resetbtn" id="holdexpandbtn" style="margin-left:auto" onclick="toggleAllHoldings()">▦ 全部展開</button></h2>
   <div class="addrow" style="margin-top:10px">
     <label>＋股票</label>
-    <input type="text" id="add_q" placeholder="輸入股號或名稱，如 2330 / 台積電 / QQQ" style="flex:1;min-width:160px">
+    <div class="acwrap"><input type="text" id="add_q" autocomplete="off" placeholder="輸入股號或名稱，如 2330 / 台積電 / QQQ"><div class="acsug" id="add_sug"></div></div>
     <select id="add_cat"></select>
     <button class="btn sm" id="addbtn" onclick="addHolding()">加入</button>
     <span id="add_msg" class="sub" style="flex-basis:100%;margin-top:2px"></span>
@@ -323,6 +334,7 @@ function buildList(){
     items.forEach(x=>list.appendChild(makeBar(x.h,x.i)));
   });
   updateHeadStats();
+  const _hb=document.getElementById('holdexpandbtn');if(_hb)_hb.textContent=S.holdings.some(h=>h._open)?'▦ 全部收合':'▦ 全部展開';
 }
 function makeBar(h,idx){
   const item=document.createElement('div');item.className='hitem'+(h._open?' open':'');item.dataset.idx=idx;
@@ -399,20 +411,57 @@ async function resolveStock(q){
   }
   return await yahooSearch(q);                     /* 中文/英文名稱 */
 }
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+async function yahooSearchList(q){
+  const url='https://query1.finance.yahoo.com/v1/finance/search?q='+encodeURIComponent(q)+'&quotesCount=8&newsCount=0&lang=zh-TW&region=TW';
+  const j=await pfetch(url,x=>(x&&x.quotes)?x:null,6000);if(!j)return [];
+  return j.quotes.filter(it=>it.symbol&&it.quoteType!=='CURRENCY'&&it.quoteType!=='INDEX'&&it.quoteType!=='FUTURE').slice(0,8)
+    .map(it=>{const sym=it.symbol;const name=(it.shortname||it.longname||sym).trim();
+      if(/\.TWO?$/.test(sym))return{code:sym.replace(/\.TWO?$/,''),name,market:'tw',ex:it.exchDisp||''};
+      return{code:sym,name,market:'us',ex:it.exchDisp||''};});
+}
+function addByInfo(info){
+  const msg=document.getElementById('add_msg');
+  if(S.holdings.some(h=>h.code===info.code)){msg.style.color='var(--up)';msg.textContent='已經有 '+info.name+'（'+info.code+'）了。';return;}
+  S.holdings.push({code:info.code,name:info.name,market:info.market,cat:document.getElementById('add_cat').value,shares:0,cost:0});
+  document.getElementById('add_q').value='';hideSug();
+  msg.style.color='var(--dn)';msg.textContent='已加入 '+info.name+'（'+info.code+'·'+(info.market==='us'?'美股':'台股')+'）';
+  buildList();recalcAlloc();save();fetchOne(S.holdings[S.holdings.length-1]).then(()=>updateBarPrices());
+}
 async function addHolding(){
-  const qi=document.getElementById('add_q');const q=qi.value.trim();const cat=document.getElementById('add_cat').value;
-  const msg=document.getElementById('add_msg');const btn=document.getElementById('addbtn');
+  const q=document.getElementById('add_q').value.trim();const msg=document.getElementById('add_msg');const btn=document.getElementById('addbtn');
   if(!q){msg.style.color='var(--up)';msg.textContent='請輸入股號或名稱';return;}
   btn.disabled=true;msg.style.color='var(--mut)';msg.textContent='查詢中…';
   let info=null;try{info=await resolveStock(q);}catch(e){}
   btn.disabled=false;
   if(!info||!info.code){msg.style.color='var(--up)';msg.textContent='找不到「'+q+'」，請改用股號（如 2330）。';return;}
-  if(S.holdings.some(h=>h.code===info.code)){msg.style.color='var(--up)';msg.textContent='已經有 '+info.name+'（'+info.code+'）了。';return;}
-  S.holdings.push({code:info.code,name:info.name,market:info.market,cat,shares:0,cost:0});
-  qi.value='';msg.style.color='var(--dn)';msg.textContent='已加入 '+info.name+'（'+info.code+'·'+(info.market==='us'?'美股':'台股')+'）';
-  buildList();recalcAlloc();save();
-  fetchOne(S.holdings[S.holdings.length-1]).then(()=>updateBarPrices());
+  addByInfo(info);
 }
+async function pickSug(info){
+  if(info.market==='tw'){for(const ex of ['tse','otc']){const j=await pfetch(twseUrl(ex,info.code),x=>(x&&x.msgArray&&x.msgArray[0]&&x.msgArray[0].n)?x:null,6000);const m=j&&j.msgArray&&j.msgArray[0];if(m&&m.n){info=Object.assign({},info,{name:m.n.trim()});break;}}}
+  addByInfo(info);
+}
+let _acTimer=null,_acSeq=0,_acList=[];
+function hideSug(){const s=document.getElementById('add_sug');if(s){s.classList.remove('show');s.innerHTML='';}}
+function showSug(html){const s=document.getElementById('add_sug');if(s){s.innerHTML=html;s.classList.add('show');}}
+function bindAutocomplete(){
+  const qi=document.getElementById('add_q');if(!qi)return;
+  qi.addEventListener('input',()=>{const q=qi.value.trim();clearTimeout(_acTimer);
+    if(q.length<1){hideSug();return;}
+    showSug('<div class="acstate">查詢中…</div>');const seq=++_acSeq;
+    _acTimer=setTimeout(async()=>{let list=[];try{list=await yahooSearchList(q);}catch(e){}if(seq!==_acSeq)return;
+      if(!list.length){showSug('<div class="acstate">找不到，可直接按「加入」用股號試試</div>');return;}
+      _acList=list;
+      showSug(list.map((it,i)=>'<div class="acitem" data-i="'+i+'"><span class="acn">'+esc(it.name)+'</span><span class="acc">'+esc(it.code)+'</span><span class="actag">'+(it.market==='us'?'美股':'台股')+(it.ex?' · '+esc(it.ex):'')+'</span></div>').join(''));
+      document.getElementById('add_sug').querySelectorAll('.acitem').forEach(el=>el.addEventListener('mousedown',e=>{e.preventDefault();pickSug(_acList[+el.dataset.i]);}));
+    },300);
+  });
+  qi.addEventListener('keydown',e=>{if(e.key==='Escape')hideSug();});
+  qi.addEventListener('blur',()=>setTimeout(hideSug,160));
+}
+function toggleAllHoldings(){const any=S.holdings.some(h=>h._open);S.holdings.forEach(h=>h._open=!any);
+  document.querySelectorAll('#hlist .hitem').forEach(it=>{const idx=+it.dataset.idx;it.classList.toggle('open',!!(S.holdings[idx]&&S.holdings[idx]._open));});
+  const b=document.getElementById('holdexpandbtn');if(b)b.textContent=any?'▦ 全部展開':'▦ 全部收合';}
 
 /* ───────── 盯盤（依分類分組） ───────── */
 function feeNet(cost,sh,exit,us){const disc=gv('disc')||0.5;const tax=document.getElementById('aftertax').checked;const mult=us?gv('fx'):1;
@@ -584,6 +633,7 @@ document.getElementById('disc').value=S.disc;document.getElementById('fx').value
 if(S.assets){if(S.assets.own!=null)document.getElementById('as_own').value=S.assets.own;if(S.assets.loan!=null)document.getElementById('as_loan').value=S.assets.loan;}
 buildCats();buildList();recalcAlloc();
 document.getElementById('add_q').addEventListener('keydown',e=>{if(e.key==='Enter')addHolding();});
+bindAutocomplete();
 fetchAll();
 setInterval(()=>{if(!document.hidden)fetchAll();},15000);
 
