@@ -583,7 +583,7 @@ fetchAll();
 setInterval(()=>{if(!document.hidden)fetchAll();},15000);
 
 /* ═══════════ Firebase 雲端同步 ═══════════ */
-const FB_CONFIG={apiKey:"PASTE_ME",authDomain:"PASTE_ME",projectId:"PASTE_ME",storageBucket:"PASTE_ME",messagingSenderId:"PASTE_ME",appId:"PASTE_ME"};
+const FB_CONFIG={apiKey:"AIzaSyAeka6qrpElotxc4mi8FgG0tROhVp93g9g",authDomain:"humeng-portfolio.firebaseapp.com",projectId:"humeng-portfolio",storageBucket:"humeng-portfolio.firebasestorage.app",messagingSenderId:"835294126286",appId:"1:835294126286:web:3ee19f7616bbcb2561709f"};
 let fbRef=null,fbUnsub=null,fbTimer=null,fbApplying=false;
 function setSync(t,on){const b=document.getElementById('syncbtn');if(!b)return;b.textContent=t;b.style.borderColor=on?'var(--accent)':'var(--line)';b.style.color=on?'var(--accent)':'var(--mut)';}
 function fbAuthClick(){if(FB_CONFIG.apiKey==='PASTE_ME'){alert('目前用「本機儲存」：資料存在這台裝置的瀏覽器。要跨手機/電腦同步，請把 Firebase 的 firebaseConfig 貼進檔案的 FB_CONFIG。');return;}
