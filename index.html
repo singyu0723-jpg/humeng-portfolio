@@ -92,6 +92,7 @@ select{font-family:inherit;font-size:13px;font-weight:800;color:var(--ink);backg
 .addrow input,.addrow select,.addrow button{height:40px;line-height:normal}
 .addrow input,.addrow select{padding:0 12px;font-size:14px}
 .addrow button{padding:0 18px}
+.addr2{display:flex;gap:8px;align-items:center}
 .acwrap{position:relative;flex:1;min-width:160px}
 .acwrap input{width:100%}
 .acsug{position:absolute;left:0;right:0;top:calc(100% + 5px);background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 26px rgba(0,0,0,.16);z-index:60;max-height:300px;overflow:auto;display:none}
@@ -154,10 +155,16 @@ input[type=range]{-webkit-appearance:none;appearance:none;height:6px;border-radi
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:19px;height:19px;border-radius:50%;background:var(--accent);cursor:pointer;border:3px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.2)}
 input[type=range]::-moz-range-thumb{width:17px;height:17px;border-radius:50%;background:var(--accent);cursor:pointer;border:3px solid #fff}
 @media(max-width:680px){.deck{padding:10px 7px 40px}.slide{padding:13px 12px}.fundrow input{width:100%}.fundrow .fi{flex:1 1 100%;justify-content:space-between}.svgpie{flex-basis:100%}
-  .brk{flex-wrap:wrap}.brk .nm{width:auto;flex:1 1 100%;font-size:13px}.brk .out{width:auto;margin-left:auto}
+  .brk{flex-wrap:wrap}.brk .nm{width:auto;flex:1 1 100%;font-size:13px}.brk .out{width:128px;flex:0 0 128px;margin-left:0}
   .pielegend{min-width:0}.onepie{gap:10px}
   .cell{min-width:calc(33.3% - 7px)}.cell b{font-size:16px}
   .wmetrics{gap:10px 14px}.whd .met{min-width:0}
+  .addrow{display:grid;grid-template-columns:auto 1fr;grid-template-areas:"lbl q" "lbl r2" "msg msg";column-gap:10px;row-gap:9px;align-items:center}
+  .addrow label{grid-area:lbl}
+  .acwrap{grid-area:q;min-width:0}
+  .addr2{grid-area:r2}
+  .addr2 select{flex:1;min-width:0}.addr2 button{flex:0 0 96px;padding:0}
+  #add_msg{grid-area:msg;flex-basis:auto;margin-top:0}
 }
 </style>
 </head>
@@ -192,8 +199,7 @@ input[type=range]::-moz-range-thumb{width:17px;height:17px;border-radius:50%;bac
   <div class="addrow" style="margin-top:10px">
     <label>＋股票</label>
     <div class="acwrap"><input type="text" id="add_q" autocomplete="off" placeholder="輸入股號或名稱，如 2330 / 台積電 / QQQ"><div class="acsug" id="add_sug"></div></div>
-    <select id="add_cat"></select>
-    <button class="btn sm" id="addbtn" onclick="addHolding()">加入</button>
+    <div class="addr2"><select id="add_cat"></select><button class="btn sm" id="addbtn" onclick="addHolding()">加入</button></div>
     <span id="add_msg" class="sub" style="flex-basis:100%;margin-top:2px"></span>
   </div>
   <div class="hlist" id="hlist"></div>
@@ -298,11 +304,13 @@ function recalcAlloc(){
   segs.push({name:'銀色彈藥',color:'#8a7b63',mv:a.silver});
   const sum=segs.reduce((s,x)=>s+x.mv,0)||1;
   const SHORT={'ETF（美股）':'ETF','短線（資金靈活）':'短線','中長期':'中長期','銀色彈藥':'銀彈','待分類':'待分'};
-  const bar=document.getElementById('catbar');if(bar){bar.innerHTML='';
+  const bar=document.getElementById('catbar');if(bar){bar.innerHTML='';const barW=bar.clientWidth||340;
     segs.forEach(s=>{const w=s.mv/sum*100;if(w<=0.2)return;const d=document.createElement('div');d.className='seg';
       d.style.width=w+'%';d.style.background=s.color;d.title=s.name+' '+w.toFixed(0)+'%';
-      const label=w>=15?s.name:(w>=7?(SHORT[s.name]||s.name):'');
-      d.innerHTML=(label?'<span class="s1">'+label+'</span>':'')+'<span class="s2">'+w.toFixed(0)+'%</span>';bar.appendChild(d);});}
+      const px=barW*w/100;const short=SHORT[s.name]||s.name;
+      let label='';if(px>=textPx(s.name)+10)label=s.name;else if(px>=textPx(short)+10)label=short;
+      let inner='';if(label)inner+='<span class="s1">'+label+'</span>';if(px>=24)inner+='<span class="s2">'+w.toFixed(0)+'%</span>';
+      d.innerHTML=inner;bar.appendChild(d);});}
   const brk=document.getElementById('catbrk');if(brk){brk.innerHTML='';
     segs.forEach(s=>{const pct=s.mv/total*100;const row=document.createElement('div');row.className='brk';
       row.innerHTML='<span class="nm"><span class="dot" style="background:'+s.color+'"></span>'+s.name+'</span>'+
@@ -311,6 +319,7 @@ function recalcAlloc(){
       brk.appendChild(row);});}
   recalcCells(a);updateHeadStats();
 }
+function textPx(s){let w=0;for(const ch of s){w+=/[　-鿿＀-￯]/.test(ch)?13:7;}return w;}
 function recalcCells(a){
   a=a||alloc();const cells=document.getElementById('cells');if(!cells)return;
   let totCost=0;S.holdings.forEach(h=>totCost+=holdingCost(h));
@@ -638,6 +647,7 @@ document.getElementById('fx').addEventListener('input',()=>{S.fx=gv('fx');update
 document.getElementById('disc').value=S.disc;document.getElementById('fx').value=S.fx;
 if(S.assets){if(S.assets.own!=null)document.getElementById('as_own').value=S.assets.own;if(S.assets.loan!=null)document.getElementById('as_loan').value=S.assets.loan;}
 buildCats();buildList();recalcAlloc();
+window.addEventListener('resize',()=>{recalcAlloc();});
 document.getElementById('add_q').addEventListener('keydown',e=>{if(e.key==='Enter')addHolding();});
 bindAutocomplete();
 fetchAll();
