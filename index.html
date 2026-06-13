@@ -421,7 +421,7 @@ async function yahooSearchList(q){
       return{code:sym,name,market:'us',ex:it.exchDisp||''};});
 }
 function addByInfo(info){
-  const msg=document.getElementById('add_msg');
+  const msg=document.getElementById('add_msg');_selInfo=null;
   if(S.holdings.some(h=>h.code===info.code)){msg.style.color='var(--up)';msg.textContent='已經有 '+info.name+'（'+info.code+'）了。';return;}
   S.holdings.push({code:info.code,name:info.name,market:info.market,cat:document.getElementById('add_cat').value,shares:0,cost:0});
   document.getElementById('add_q').value='';hideSug();
@@ -429,6 +429,7 @@ function addByInfo(info){
   buildList();recalcAlloc();save();fetchOne(S.holdings[S.holdings.length-1]).then(()=>updateBarPrices());
 }
 async function addHolding(){
+  if(_selInfo){addByInfo(_selInfo);return;}                 /* 已從下拉選了候選 → 直接加入 */
   const q=document.getElementById('add_q').value.trim();const msg=document.getElementById('add_msg');const btn=document.getElementById('addbtn');
   if(!q){msg.style.color='var(--up)';msg.textContent='請輸入股號或名稱';return;}
   btn.disabled=true;msg.style.color='var(--mut)';msg.textContent='查詢中…';
@@ -438,15 +439,17 @@ async function addHolding(){
   addByInfo(info);
 }
 async function pickSug(info){
+  hideSug();
   if(info.market==='tw'){for(const ex of ['tse','otc']){const j=await pfetch(twseUrl(ex,info.code),x=>(x&&x.msgArray&&x.msgArray[0]&&x.msgArray[0].n)?x:null,6000);const m=j&&j.msgArray&&j.msgArray[0];if(m&&m.n){info=Object.assign({},info,{name:m.n.trim()});break;}}}
-  addByInfo(info);
+  _selInfo=info;document.getElementById('add_q').value=info.name+' '+info.code;
+  const msg=document.getElementById('add_msg');msg.style.color='var(--accent)';msg.textContent='已選擇 '+info.name+'（'+info.code+'·'+(info.market==='us'?'美股':'台股')+'）— 選好右邊分類後按「加入」';
 }
-let _acTimer=null,_acSeq=0,_acList=[];
+let _acTimer=null,_acSeq=0,_acList=[],_selInfo=null;
 function hideSug(){const s=document.getElementById('add_sug');if(s){s.classList.remove('show');s.innerHTML='';}}
 function showSug(html){const s=document.getElementById('add_sug');if(s){s.innerHTML=html;s.classList.add('show');}}
 function bindAutocomplete(){
   const qi=document.getElementById('add_q');if(!qi)return;
-  qi.addEventListener('input',()=>{const q=qi.value.trim();clearTimeout(_acTimer);
+  qi.addEventListener('input',()=>{const q=qi.value.trim();clearTimeout(_acTimer);_selInfo=null;
     if(q.length<1){hideSug();return;}
     showSug('<div class="acstate">查詢中…</div>');const seq=++_acSeq;
     _acTimer=setTimeout(async()=>{let list=[];try{list=await yahooSearchList(q);}catch(e){}if(seq!==_acSeq)return;
